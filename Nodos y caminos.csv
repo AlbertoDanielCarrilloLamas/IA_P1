@@ -1,0 +1,22 @@
+Origen,Destino,Longitud camino
+Casa,Base aerea,2
+Base aerea,Real center,2
+Real center,Trompo magico,1
+Trompo magico,Juan palomar,2.5
+Juan palomar,Estadio 3 de marzo,3
+Estadio 3 de marzo,Pablo neruda,2
+Pablo neruda,CETI,1.5
+Trompo magico,Acueducto,2
+Acueducto,Pabellon,2.5
+Pabellon,Pablo neruda,2
+Pabellon,Alberta,1.5
+Alberta,CETI,1.5
+Base aerea,La cima,3
+La cima,Belenes,2
+Belenes,Zapopan,3
+Zapopan,Americas,1
+Americas ,Alberta,1.5
+Zapopan,Plaza patria,2
+Plaza patria,Alberta,2
+,,
+,,
