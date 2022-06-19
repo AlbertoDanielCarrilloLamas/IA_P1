@@ -1,0 +1,178 @@
+from google.colab import files
+uploaded = files.upload()
+
+!pip install tensorflow==1.15
+!pip install tflearn
+
+import numpy as np
+import tensorflow as tf
+
+import tflearn
+import random
+import pickle
+import json
+
+with open('intents.json') as file:
+    intents = json.load(file, strict = False) 
+intents = intents['intents'] # obtiene cada intent
+
+print("[", end = "")
+for intent in intents:
+  print("{", end = "")
+  for key, value in intent.items():
+    print("{}: {},".format(key, value))  #key and value de los intent
+  print("\b\b\n},")
+print("\b\b]")
+
+
+import nltk
+nltk.download('all')
+# procesa la entrada de datos (dialogos)
+from nltk.stem.snowball import SnowballStemmer
+stemmer = SnowballStemmer('english')
+
+retrain_model = True
+
+if retrain_model:
+    all_words = [] 
+    all_tags = [] #carga cada tags de archivo Json 
+    intent_patterns = [] 
+    intent_tags = []  #lista de tags
+    
+    for intent in intents:
+        for pattern in intent['patterns']:
+            words = nltk.word_tokenize(pattern)
+                                                #llenamos la lista creada tokenizada
+            all_words.extend(words)
+            intent_patterns.append(words)
+            intent_tags.append(intent['tag'])
+            
+        all_tags.append(intent['tag'])
+      
+  
+    all_words = [stemmer.stem(word.lower()) for word in all_words]
+    all_words = sorted(list(set(all_words)))
+    #pasamos a minusculas y ordenamos para tener más claro las palabras parecidas
+    all_tags = sorted(all_tags)
+    
+    x_train = []
+    y_train = []
+    
+    y_empty = [0 for i in range(len(all_tags))]
+    
+#--    
+    for index, intent in enumerate(intent_patterns):
+        bag_of_words = []
+        
+        intent_words = [stemmer.stem(word.lower()) for word in intent]
+        
+        for word in all_words:
+            if word in intent_words:
+                bag_of_words.append(1)
+            else:
+                bag_of_words.append(0)
+                
+        one_hot_encode_y = y_empty[:]
+        one_hot_encode_y[all_tags.index(intent_tags[index])] = 1
+        
+        x_train.append(bag_of_words)
+        y_train.append(one_hot_encode_y)
+    
+    x_train = np.array(x_train)
+    y_train = np.array(y_train)
+    
+    with open('training_data.pickle', 'wb') as f:
+        pickle.dump((all_words, all_tags, x_train, y_train), f)
+else:
+    with open('training_data.pickle', 'rb') as f:
+        all_words, all_tags, x_train, y_train = pickle.load(f)
+
+tf.reset_default_graph()
+
+#Crea una red neuronal
+neural_net = tflearn.input_data(shape = [None, len(x_train[0])])
+neural_net = tflearn.fully_connected(neural_net, 8)
+neural_net = tflearn.fully_connected(neural_net, 8)
+ 
+neural_net = tflearn.fully_connected(neural_net, len(y_train[0]), activation = 'softmax')
+neural_net = tflearn.regression(neural_net)
+
+model = tflearn.DNN(neural_net)
+
+if retrain_model:
+    #Entrenamos la red
+    model.fit(x_train, y_train, n_epoch = 500, batch_size = 8, show_metric = True)
+    model.save('model.tfl')
+else:
+    model.load('./model.tfl')
+
+
+def text_to_bag(text, all_words): #creamos el medio para poder interactuar con el bot
+    
+    bag_of_words = [0 for i in range(len(all_words))]
+    
+    
+    text_words = nltk.word_tokenize(text)
+    text_words = [stemmer.stem(word.lower()) for word in text_words]
+    
+    #alimentamos la bolsa con la entrada de datos
+    for word in text_words:
+        if word in all_words:
+            bag_of_words[all_words.index(word)] = 1
+    
+    
+    return np.array(bag_of_words)
+
+
+
+def chat():
+    
+    print("Enter a message to talk to the bot [type quit to exit].")
+    
+    
+    context_state = None
+    
+    #cuando no hace match con alguna otra opcion del Json
+    default_responses = ['Sorry, Im not sure I know what you mean! You could try rephrasing that or saying something else!',
+                         'You confuse me human. Lets talk about something else.',
+                         'Im not sure what that means and I dont really care. Lets talk about something else',
+                         'I dont understand that! Try rephrasing or saying something else.']
+
+    
+    while True:
+        user_chat = str(input('You: '))
+        if user_chat.lower() == 'quit':
+            break
+        
+        user_chat_bag = text_to_bag(user_chat, all_words)
+
+        response = model.predict([user_chat_bag])[0]
+
+        response_index = np.argmax(response)
+        response_tag = all_tags[response_index]
+        
+    
+        if response[response_index] > 0.8:
+            for intent in intents:
+               
+                if intent['tag'] == response_tag:
+                    
+                    if 'context_filter' not in intent or 'context_filter' in intent and intent['context_filter'] == context_state:
+                        #
+                        possible_responses = intent['responses']
+                        
+                        if 'context_set' in intent:
+                            context_state = intent['context_set']
+                        else:
+                            context_state = None
+                        
+                        print(random.choice(possible_responses))
+                    else:
+                        
+                        print(random.choice(default_responses))
+        else:
+            
+            print(random.choice(default_responses)) 
+
+
+chat()
